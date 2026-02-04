@@ -162,12 +162,12 @@ export default function AdminEtkinliklerPage() {
                         <Users className="w-4 h-4 text-gray-400" />
                         <span className="font-medium text-gray-900">{event.participants}</span>
                         <span className="text-gray-400">/</span>
-                        <span className="text-gray-600">{event.capacity}</span>
+                        <span className="text-gray-600">{event.maxParticipants}</span>
                       </div>
                       <div className="w-20 bg-gray-200 rounded-full h-1.5 mt-2">
                         <div
                           className="bg-orange-500 h-1.5 rounded-full"
-                          style={{ width: `${(event.participants / event.capacity) * 100}%` }}
+                          style={{ width: `${(event.participants / event.maxParticipants) * 100}%` }}
                         ></div>
                       </div>
                     </td>
