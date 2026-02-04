@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Copy package files from apps/web
 COPY apps/web/package.json apps/web/package-lock.json* ./
-RUN npm ci --only=production
+RUN npm ci
 
 # Stage 2: Builder
 FROM node:18-alpine AS builder
