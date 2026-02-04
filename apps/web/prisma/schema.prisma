@@ -1,0 +1,482 @@
+// Prisma Schema for Mekan Gezer
+// PostgreSQL + PostGIS
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis, uuid_ossp(map: "uuid-ossp"), pg_trgm]
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  user
+  creator
+  moderator
+  admin
+}
+
+enum VenueStatus {
+  pending
+  approved
+  rejected
+}
+
+enum EventStatus {
+  draft
+  published
+  cancelled
+  completed
+}
+
+enum ReportStatus {
+  pending
+  resolved
+  dismissed
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique @db.VarChar(50)
+  passwordHash  String    @map("password_hash")
+  role          UserRole  @default(user)
+  
+  // Profile
+  firstName     String?   @map("first_name") @db.VarChar(50)
+  lastName      String?   @map("last_name") @db.VarChar(50)
+  avatarUrl     String?   @map("avatar_url")
+  bio           String?   @db.Text
+  
+  // Location
+  cityId        String?   @map("city_id")
+  city          City?     @relation(fields: [cityId], references: [id])
+  
+  // Grupo Pro Integration
+  grupoUserId   Int?      @unique @map("grupo_user_id")
+  
+  // Bans & Restrictions
+  isBanned      Boolean   @default(false) @map("is_banned")
+  banReason     String?   @map("ban_reason") @db.Text
+  banUntil      DateTime? @map("ban_until")
+  
+  // Social
+  followersCount Int      @default(0) @map("followers_count")
+  followingCount Int      @default(0) @map("following_count")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+  
+  // Relations
+  venues              Venue[]           @relation("VenueCreator")
+  events              Event[]           @relation("EventCreator")
+  favorites           Favorite[]
+  ratings             Rating[]
+  reviews             Review[]
+  eventParticipants   EventParticipant[]
+  reports             Report[]          @relation("Reporter")
+  moderationLogs      ModerationLog[]
+  followers           Follow[]          @relation("Following")
+  following           Follow[]          @relation("Follower")
+
+  @@map("users")
+  @@index([email])
+  @@index([username])
+  @@index([role])
+}
+
+// ============================================
+// LOCATION HIERARCHY
+// ============================================
+
+model City {
+  id            String     @id @default(uuid())
+  name          String     @db.VarChar(100)
+  slug          String     @unique @db.VarChar(100)
+  latitude      Float?
+  longitude     Float?
+  
+  // Grupo Pro chat room
+  grupoRoomId   Int?       @unique @map("grupo_room_id")
+  
+  createdAt     DateTime   @default(now()) @map("created_at")
+  
+  // Relations
+  districts     District[]
+  venues        Venue[]
+  users         User[]
+
+  @@map("cities")
+  @@index([slug])
+}
+
+model District {
+  id            String          @id @default(uuid())
+  cityId        String          @map("city_id")
+  name          String          @db.VarChar(100)
+  slug          String          @db.VarChar(100)
+  latitude      Float?
+  longitude     Float?
+  
+  // Grupo Pro chat room
+  grupoRoomId   Int?            @unique @map("grupo_room_id")
+  
+  createdAt     DateTime        @default(now()) @map("created_at")
+  
+  // Relations
+  city          City            @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  neighborhoods Neighborhood[]
+  venues        Venue[]
+
+  @@map("districts")
+  @@unique([cityId, slug])
+  @@index([cityId])
+  @@index([slug])
+}
+
+model Neighborhood {
+  id            String    @id @default(uuid())
+  districtId    String    @map("district_id")
+  name          String    @db.VarChar(100)
+  slug          String    @db.VarChar(100)
+  latitude      Float?
+  longitude     Float?
+  
+  // Grupo Pro chat room
+  grupoRoomId   Int?      @unique @map("grupo_room_id")
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  district      District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  venues        Venue[]
+
+  @@map("neighborhoods")
+  @@unique([districtId, slug])
+  @@index([districtId])
+  @@index([slug])
+}
+
+// ============================================
+// VENUE (MEKAN)
+// ============================================
+
+model Category {
+  id            String   @id @default(uuid())
+  name          String   @db.VarChar(100)
+  slug          String   @unique @db.VarChar(100)
+  icon          String?  @db.VarChar(50)
+  description   String?  @db.Text
+  parentId      String?  @map("parent_id")
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  parent        Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children      Category[] @relation("CategoryHierarchy")
+  venues        Venue[]
+
+  @@map("categories")
+  @@index([slug])
+  @@index([parentId])
+}
+
+model Venue {
+  id              String       @id @default(uuid())
+  name            String       @db.VarChar(255)
+  slug            String       @unique @db.VarChar(255)
+  description     String?      @db.Text
+  
+  // Category
+  categoryId      String?      @map("category_id")
+  category        Category?    @relation(fields: [categoryId], references: [id])
+  
+  // Location (PostGIS)
+  latitude        Float
+  longitude       Float
+  address         String?      @db.Text
+  
+  // Location hierarchy
+  cityId          String?      @map("city_id")
+  city            City?        @relation(fields: [cityId], references: [id])
+  districtId      String?      @map("district_id")
+  district        District?    @relation(fields: [districtId], references: [id])
+  neighborhoodId  String?      @map("neighborhood_id")
+  neighborhood    Neighborhood? @relation(fields: [neighborhoodId], references: [id])
+  
+  // Media
+  coverImageUrl   String?      @map("cover_image_url")
+  images          VenueImage[]
+  
+  // Contact
+  phone           String?      @db.VarChar(20)
+  website         String?      @db.VarChar(255)
+  instagram       String?      @db.VarChar(100)
+  
+  // Admin & Approval
+  submittedById   String       @map("submitted_by_id")
+  submittedBy     User         @relation("VenueCreator", fields: [submittedById], references: [id])
+  status          VenueStatus  @default(pending)
+  approvedById    String?      @map("approved_by_id")
+  approvedAt      DateTime?    @map("approved_at")
+  rejectionReason String?      @map("rejection_reason") @db.Text
+  
+  // Stats
+  viewCount       Int          @default(0) @map("view_count")
+  favoriteCount   Int          @default(0) @map("favorite_count")
+  averageRating   Float?       @default(0) @map("average_rating")
+  ratingCount     Int          @default(0) @map("rating_count")
+  
+  // SEO
+  metaTitle       String?      @map("meta_title") @db.VarChar(255)
+  metaDescription String?      @map("meta_description") @db.Text
+  
+  // Timestamps
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  
+  // Relations
+  favorites       Favorite[]
+  ratings         Rating[]
+  reviews         Review[]
+  events          Event[]
+
+  @@map("venues")
+  @@index([status])
+  @@index([cityId])
+  @@index([districtId])
+  @@index([categoryId])
+  @@index([slug])
+  @@index([createdAt])
+}
+
+model VenueImage {
+  id          String   @id @default(uuid())
+  venueId     String   @map("venue_id")
+  imageUrl    String   @map("image_url")
+  caption     String?  @db.Text
+  order       Int      @default(0)
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  venue       Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@map("venue_images")
+  @@index([venueId])
+  @@index([order])
+}
+
+// ============================================
+// EVENTS (ETKİNLİK)
+// ============================================
+
+model Event {
+  id              String       @id @default(uuid())
+  title           String       @db.VarChar(255)
+  slug            String       @unique @db.VarChar(255)
+  description     String?      @db.Text
+  
+  // Date & Time
+  eventDate       DateTime     @map("event_date")
+  endDate         DateTime?    @map("end_date")
+  
+  // Location
+  venueId         String?      @map("venue_id")
+  venue           Venue?       @relation(fields: [venueId], references: [id])
+  latitude        Float?
+  longitude       Float?
+  customLocation  String?      @map("custom_location") @db.Text
+  
+  // Media
+  coverImageUrl   String?      @map("cover_image_url")
+  
+  // Details
+  capacity        Int?
+  isFree          Boolean      @default(true) @map("is_free")
+  price           Float?
+  
+  // Admin
+  createdById     String       @map("created_by_id")
+  createdBy       User         @relation("EventCreator", fields: [createdById], references: [id])
+  status          EventStatus  @default(draft)
+  
+  // Grupo Pro Integration
+  grupoGroupId    Int?         @unique @map("grupo_group_id")
+  autoCreateChat  Boolean      @default(true) @map("auto_create_chat")
+  
+  // Stats
+  viewCount       Int          @default(0) @map("view_count")
+  participantCount Int         @default(0) @map("participant_count")
+  
+  // Timestamps
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  
+  // Relations
+  participants    EventParticipant[]
+
+  @@map("events")
+  @@index([status])
+  @@index([eventDate])
+  @@index([createdById])
+  @@index([slug])
+}
+
+model EventParticipant {
+  id          String   @id @default(uuid())
+  eventId     String   @map("event_id")
+  userId      String   @map("user_id")
+  status      String   @default("confirmed") @db.VarChar(20) // confirmed, waitlist, cancelled
+  
+  joinedAt    DateTime @default(now()) @map("joined_at")
+  
+  // Relations
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_participants")
+  @@index([eventId])
+  @@index([userId])
+}
+
+// ============================================
+// USER INTERACTIONS
+// ============================================
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  venueId   String   @map("venue_id")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, venueId])
+  @@map("favorites")
+  @@index([userId])
+  @@index([venueId])
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  venueId   String   @map("venue_id")
+  rating    Int      // 1-5
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, venueId])
+  @@map("ratings")
+  @@index([userId])
+  @@index([venueId])
+  @@index([rating])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  venueId   String   @map("venue_id")
+  content   String   @db.Text
+  images    String[] @default([])
+  
+  // Stats
+  likeCount Int      @default(0) @map("like_count")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+  @@index([userId])
+  @@index([venueId])
+  @@index([createdAt])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  follower    User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// ============================================
+// MODERATION
+// ============================================
+
+model Report {
+  id          String       @id @default(uuid())
+  reportedBy  String       @map("reported_by")
+  targetType  String       @map("target_type") @db.VarChar(50) // venue, user, message, event
+  targetId    String       @map("target_id")
+  reason      String       @db.Text
+  status      ReportStatus @default(pending)
+  
+  resolvedBy  String?      @map("resolved_by")
+  resolvedAt  DateTime?    @map("resolved_at")
+  
+  createdAt   DateTime     @default(now()) @map("created_at")
+  
+  // Relations
+  reporter    User         @relation("Reporter", fields: [reportedBy], references: [id])
+
+  @@map("reports")
+  @@index([status])
+  @@index([reportedBy])
+  @@index([targetType, targetId])
+}
+
+model ModerationLog {
+  id          String   @id @default(uuid())
+  moderatorId String   @map("moderator_id")
+  action      String   @db.VarChar(50) // approve_venue, reject_venue, ban_user, etc
+  targetType  String   @map("target_type") @db.VarChar(50)
+  targetId    String   @map("target_id")
+  reason      String?  @db.Text
+  metadata    Json?
+  
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  // Relations
+  moderator   User     @relation(fields: [moderatorId], references: [id])
+
+  @@map("moderation_logs")
+  @@index([moderatorId])
+  @@index([action])
+  @@index([createdAt])
+}

@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: mekangezer-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-mekangezer}
+      POSTGRES_USER: ${DB_USER:-mekangezer_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - mekangezer-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mekangezer_user} -d ${DB_NAME:-mekangezer}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: mekangezer-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mekangezer-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  mekangezer-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
