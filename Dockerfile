@@ -9,7 +9,8 @@ WORKDIR /app
 # Copy package files and prisma schema from apps/web
 COPY apps/web/package.json apps/web/package-lock.json* ./
 COPY apps/web/prisma ./prisma
-RUN npm ci
+# Install all dependencies (including devDependencies for build)
+RUN npm ci --include=dev
 
 # Stage 2: Builder
 FROM node:18-alpine AS builder
