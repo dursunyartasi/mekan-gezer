@@ -6,8 +6,9 @@ FROM node:18-alpine AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files from apps/web
+# Copy package files and prisma schema from apps/web
 COPY apps/web/package.json apps/web/package-lock.json* ./
+COPY apps/web/prisma ./prisma
 RUN npm ci
 
 # Stage 2: Builder
