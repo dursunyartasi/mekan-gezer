@@ -23,7 +23,6 @@ COPY apps/web/ .
 
 # Set environment variable for build
 ENV NEXT_TELEMETRY_DISABLED 1
-ENV NODE_ENV production
 
 # Generate Prisma Client
 RUN npx prisma generate
