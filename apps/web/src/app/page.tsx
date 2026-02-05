@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 export default function HomePage() {
   const [email, setEmail] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const featuredEvents = [
     {
@@ -115,19 +116,32 @@ export default function HomePage() {
                 İstanbul'un en güzel mekanlarını keşfet, fotoğraf yürüyüşlerine katıl ve tutkunu olduğun insanlarla buluş
               </p>
               
-              <div className="flex gap-3 mb-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (searchQuery.trim()) {
+                    window.location.href = `/mekanlar?q=${encodeURIComponent(searchQuery.trim())}`;
+                  }
+                }}
+                className="flex gap-3 mb-6"
+              >
                 <div className="flex-1 relative">
                   <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input 
+                  <input
                     type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Mekan veya etkinlik ara..."
                     className="w-full pl-12 pr-4 py-4 border-2 border-gray-200 rounded-2xl focus:border-orange-500 focus:outline-none transition"
                   />
                 </div>
-                <button className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl hover:shadow-lg transition flex items-center gap-2">
+                <button
+                  type="submit"
+                  className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl hover:shadow-lg transition flex items-center gap-2"
+                >
                   Ara <ArrowRight className="w-5 h-5" />
                 </button>
-              </div>
+              </form>
 
               <div className="flex gap-8 text-sm">
                 <div>
