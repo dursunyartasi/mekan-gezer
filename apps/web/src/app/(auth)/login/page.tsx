@@ -112,15 +112,6 @@ export default function LoginPage() {
             </Link>
           </div>
         </div>
-
-        {/* Demo hesap bilgisi */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-          <p className="font-semibold text-blue-900 mb-2">Test için Admin Hesabı:</p>
-          <p className="text-blue-800">
-            Email: admin@mekangezer.com<br />
-            Şifre: Admin123!
-          </p>
-        </div>
       </div>
     </div>
   );

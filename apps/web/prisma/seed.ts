@@ -13,9 +13,16 @@ async function main() {
   // 1. Create Admin User
   // ============================================
   console.log('👤 Creating admin user...');
-  
-  const adminPassword = await bcrypt.hash('Admin123!', 10);
-  
+
+  const adminDefaultPassword = process.env.ADMIN_DEFAULT_PASSWORD || 'Admin123!';
+  const adminPassword = await bcrypt.hash(adminDefaultPassword, 10);
+
+  if (process.env.ADMIN_DEFAULT_PASSWORD) {
+    console.log('⚠️  Using admin password from ADMIN_DEFAULT_PASSWORD environment variable');
+  } else {
+    console.log('⚠️  ADMIN_DEFAULT_PASSWORD not set, using default password');
+  }
+
   const admin = await prisma.user.upsert({
     where: { email: 'admin@mekangezer.com' },
     update: {},
@@ -331,8 +338,12 @@ async function main() {
   console.log('✨ Seed completed successfully!');
   console.log('');
   console.log('📧 Admin Email: admin@mekangezer.com');
-  console.log('🔑 Admin Password: Admin123!');
-  console.log('⚠️  Please change the password in production!');
+  if (process.env.ADMIN_DEFAULT_PASSWORD) {
+    console.log('🔑 Admin Password: (from ADMIN_DEFAULT_PASSWORD env variable)');
+  } else {
+    console.log('🔑 Admin Password: Admin123!');
+  }
+  console.log('⚠️  Please change the password after first login!');
 }
 
 main()
