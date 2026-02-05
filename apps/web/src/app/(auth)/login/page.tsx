@@ -20,6 +20,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Log login attempt
+      await fetch('/api/log-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: 'info',
+          category: 'auth',
+          message: 'Login attempt',
+          details: { email },
+        }),
+      });
+
       const result = await signIn('credentials', {
         email,
         password,
@@ -28,12 +40,45 @@ export default function LoginPage() {
 
       if (result?.error) {
         setError(result.error);
+        // Log login error
+        await fetch('/api/log-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            level: 'error',
+            category: 'auth',
+            message: 'Login failed',
+            details: { email, error: result.error },
+          }),
+        });
       } else if (result?.ok) {
+        // Log successful login
+        await fetch('/api/log-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            level: 'info',
+            category: 'auth',
+            message: 'Login successful',
+            details: { email },
+          }),
+        });
         // Redirect to admin panel
         window.location.href = '/admin/dashboard';
       }
     } catch (err) {
       setError('Giriş yapılırken bir hata oluştu');
+      // Log exception
+      await fetch('/api/log-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: 'error',
+          category: 'auth',
+          message: 'Login exception',
+          details: { email, error: err instanceof Error ? err.message : String(err) },
+        }),
+      });
     } finally {
       setLoading(false);
     }
